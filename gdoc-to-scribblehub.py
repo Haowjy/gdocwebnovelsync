@@ -6,23 +6,68 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
+import browser_cookie3
 import json
 import mechanicalsoup
 import requests
 from datetime import datetime
+
+from enum import Enum
+class Action(Enum):
+    NEW_DRAFT = 0
+    UPDATE_DRAFT = 1
+    # ! TODO: haven't built any of the other functionality
+    NEW_CHAPTER = 2
+    UPDATE_CHAPTER = 3
+
+class Browser(Enum):
+    CHROME = 0
+    FIREFOX = 1
+    OPERA = 2
+    EDGE = 3
+    CHROMIUM = 4
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/documents.readonly']
 
 # The ID of a document.
 secrets_folder = Path("secrets")
-print(os.path.exists(secrets_folder / "secrets.json") )
 with open(secrets_folder / "secrets.json") as f:
   secrets = json.load(f)
 
 DOCUMENT_ID = secrets['google_docs']['gdoc_id']
 
 # * Horizontal line will return '<hr />'
+
+def handleTextStyle(text_run):
+    if(len(text_run.get('textStyle'))==0):
+        # print('no more text style')
+        return text_run
+    else:
+        if(text_run.get('textStyle').get('bold')):
+            # delete bold
+            text_run.get('textStyle').pop('bold')
+            # add bold tags to front and back
+            text_run.update(content = '<strong>'+text_run.get('content')+'</strong>')
+            return handleTextStyle(text_run)
+
+        elif(text_run.get('textStyle').get('italic')):
+            text_run.get('textStyle').pop('italic')             # delete italic
+            text_run.update(content = '<em>'+text_run.get('content')+'</em>') # add bold italic to front and back
+            return handleTextStyle(text_run)
+
+        elif(text_run.get('textStyle').get('underline')):
+            text_run.get('textStyle').pop('underline')             # delete underline
+            text_run.update(content = '<span style="text-decoration: underline;">'+text_run.get('content')+'</span>') # add underline tags to front and back
+            return handleTextStyle(text_run)
+
+        elif(text_run.get('textStyle').get('strikethrough')):
+            text_run.get('textStyle').pop('strikethrough')             # delete strikethrough
+            text_run.update(content = '<span style="text-decoration: line-through;">'+text_run.get('content')+'</span>') # add strikethrough tags to front and back
+            return handleTextStyle(text_run)
+        else:
+            print('unrecognized styles remain')
+            return text_run
 
 def read_paragraph_element(element):
     """Returns the text in the given ParagraphElement.
@@ -33,12 +78,13 @@ def read_paragraph_element(element):
     text_run = element.get('textRun')
     if not text_run:
         if element.get('horizontalRule'):
-            return '<hr />'
+            return '<hr />', False
         return ''
-    return "<p>"+text_run.get('content').replace("\n","</p>\n")
+    text_run = handleTextStyle(text_run)
+    return text_run.get('content'), True
 
 
-def read_strucutural_elements(elements):
+def read_strucutural_elements(elements, addPTag=True):
     """Recurses through a list of Structural Elements to read a document's text where text may be
         in nested elements.
 
@@ -49,73 +95,127 @@ def read_strucutural_elements(elements):
     for value in elements:
         if 'paragraph' in value:
             elements = value.get('paragraph').get('elements')
+
+            elements_text = ''
+            # addPTag = True
             for elem in elements:
-                text += read_paragraph_element(elem)
+                elem_text, addPTag = read_paragraph_element(elem)
+                elements_text += elem_text
+            
+            if(addPTag):
+                if(elements_text[-1]=='\n'):
+                    text+= '<p>'+elements_text[:-1]+'</p>\n'
+                else:
+                    text += '<p>'+elements_text+'</p>'
+            else:
+                text += elements_text
         elif 'table' in value:
             # The text in table cells are in nested Structural Elements and tables may be
             # nested.
+            #style="border-collapse: collapse; width: 100%;"
+            text+='<table><tbody>'
             table = value.get('table')
             for row in table.get('tableRows'):
+                text+='<tr>'
                 cells = row.get('tableCells')
                 for cell in cells:
-                    text += read_strucutural_elements(cell.get('content'))
+                    #style="width: 50%;"
+                    text +=  '<td>' + read_strucutural_elements(cell.get('content')) + '</td>'
+                text+='</tr>'
+            text+='</tbody></table>'
         elif 'tableOfContents' in value:
             # The text in the TOC is also in a Structural Element.
             toc = value.get('tableOfContents')
             text += read_strucutural_elements(toc.get('content'))
     return text
 
-def new_scribblehub_chapter(chapter_title, chapter_content, draft=True):
+def new_scribblehub_chapter(chapter_title, chapter_content, action=Action.NEW_DRAFT, postid=None, browser_type=Browser.FIREFOX):
     """Creates a new scribblehub chapter using mechanicalsoup to access a stateful browser.
     Returns True if successful, False if unsuccessful."""
+    if(postid is None and action==Action.UPDATE_DRAFT):
+        print('need postid to update draft')
+        return False
+
     series_id = secrets["scribblehub"]["series_id"]
-    username = secrets["scribblehub"]["username"]
-    password = secrets["scribblehub"]["password"]
+    # username = secrets["scribblehub"]["username"]
+    # password = secrets["scribblehub"]["password"]
 
     host_url = "www.scribblehub.com"
-    login_url = "https://www.scribblehub.com/login/"
-    new_chatper_url = f"https://www.scribblehub.com/addchapter/{series_id}"
+    # login_url = "https://www.scribblehub.com/login/"
+    new_chapter_url = f"https://www.scribblehub.com/addchapter/{series_id}"
 
-    chapter_title = chapter_title
-    chapter_content = chapter_content
+    scribble_editedtitle = chapter_title
+    scribble_editedinfo = chapter_content
+
+    if(action==Action.NEW_DRAFT):
+        scribble_action = 'wi_addeditchapter'
+        scribble_edittype = 'savedraft'
+        scribble_postid = f"addchapter-{series_id}"
+
+    elif(action==Action.UPDATE_DRAFT):
+        scribble_action = 'wi_addeditchapter'
+        scribble_edittype = 'savedraft'
+        scribble_postid = postid
+    
+    elif(action==Action.NEW_CHAPTER):
+        # !
+        print('TODO!!!')
+        return False
+    
+    elif(action==Action.UPDATE_CHAPTER):
+        # !
+        print('TODO !!!')
+        return False
 
     now = datetime.now() # current date and time
-    editdatetime = now.strftime("%b %d, %Y %I:%M %p")
+    scribble_editdatetime = now.strftime("%b %d, %Y %I:%M %p")
 
     # Start using mechanicalsoup
     browser = mechanicalsoup.StatefulBrowser()
-    browser.open(login_url)
+    if(browser_type==Browser.CHROME):
+        cj = browser_cookie3.chrome(domain_name='www.scribblehub.com')
+    elif(browser_type==Browser.FIREFOX):
+        cj = browser_cookie3.firefox(domain_name='www.scribblehub.com')
+    elif(browser_type==Browser.OPERA):
+        cj = browser_cookie3.opera(domain_name='www.scribblehub.com')
+    elif(browser_type==Browser.EDGE):
+        cj = browser_cookie3.edge(domain_name='www.scribblehub.com')
+    elif(browser_type==Browser.CHROMIUM):
+        cj = browser_cookie3.chromium(domain_name='www.scribblehub.com')
+    else:
+        cj = browser_cookie3.load(domain_name='www.scribblehub.com')
+    print(cj)
+    browser.set_cookiejar(cj)
+    browser.open(new_chapter_url)
 
-    browser.select_form('form[name="loginform"]')
-    browser["reg_username"] = username
-    browser["reg_password"] = password
-    response = browser.submit_selected()
-    browser.open(new_chatper_url)
+    # browser.launch_browser()
+
     headers = {
         "Scheme": "https",
         "Host": host_url,
         "Filename":"/wp-admin/admin-ajax.php",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept-Encoding":"gzip, deflate, br",
+        "Accept":"*/*",
+        "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
 
     formdata = {
-        "action": "wi_addeditchapter",
-        "editedinfo": chapter_content,
-        "editedtitle": chapter_title,
-        "edittype": "savedraft",
-        "editdatetime": editdatetime,
-        "mypostid": f"addchapter-{series_id}"
+        "action": scribble_action,
+        "editedinfo": scribble_editedinfo,
+        "editedtitle": scribble_editedtitle,
+        "edittype": scribble_edittype,
+        "editdatetime": scribble_editdatetime,
+        "mypostid": scribble_postid
     }
-
     r = requests.post("https://www.scribblehub.com/wp-admin/admin-ajax.php",headers=headers,data=formdata, cookies=browser.get_cookiejar())
 
     if(r.status_code==200):
-        draftString=""
-        if(draft):
-            draftString = "draft"
-        print(f"Successfully posted {draftString} chapter. Chapter postid: {r.text}")
+        print(f"Successfully posted {action.name} chapter. Chapter postid: {r.text}")
+        print(repr(r.text))
         return True
     else:
-        print(f"Failed. Response text: {r.text}")
+        print(f"Failed in {action.name}.\nResponse text: {r.text}\nReason: {r.reason}\nRequest: {r.request.body}")
         return False
 
 def main():
@@ -154,7 +254,7 @@ def main():
     print(chapter_title)
     print(chapter_content)
 
-    print(f"Successful: {new_scribblehub_chapter(chapter_title, chapter_content, draft=True)}")
+    print(f"Successful: {new_scribblehub_chapter(chapter_title, chapter_content, action=Action.NEW_DRAFT, postid='314255')}")
 
 
 if __name__ == '__main__':

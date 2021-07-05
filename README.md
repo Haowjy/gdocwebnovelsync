@@ -10,6 +10,12 @@ Sync your webnovel work across multiple platforms and google docs
 
 ## Supported Web Novel websites
 
+> Make sure you are logged into your account in one of the supported browsers:
+>
+> * Chrome, Firefox, Opera, Edge, Chromimum
+>
+> Note that if you try to log in too many times, a captcha might appear and prevent this program from logging into your account. Also, Chrome is usually buggy, so it's probably not best to use Chrome for this.
+
 * Scribblehub
 
 ## Set up project

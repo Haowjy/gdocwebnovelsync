@@ -5,6 +5,7 @@ secrets.json
 
 # Tests
 test/
+testenv/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
