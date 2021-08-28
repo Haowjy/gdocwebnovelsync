@@ -1,0 +1,18 @@
+{
+    "settings": {
+        "browser": "NONE",
+        "localstorage": "localstorage"
+    },
+    "stories": [
+        {
+            "series_name": "series_name",
+            "local_series_id": 0,
+            "general": {
+                "scribblehub": {
+                    "series_id": "series_id"
+                }
+            },
+            "chapters": []
+        }
+    ]
+}

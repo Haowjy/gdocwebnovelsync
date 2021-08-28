@@ -4,6 +4,8 @@ Sync your webnovel work across multiple platforms and google docs
 
 ## Notes
 
+* Uses browser cookies to post. Recaptcha/bot prevention may be one of the reasons why this does not work. However, I have tested it and it shouldn't come up too often if you don't spam.
+
 * Uses [google docs api](https://developers.google.com/docs/api) access google docs. Must use a Google Cloud Platform project with the API enabled (I am currently using my own API). See [https://developers.google.com/workspace/guides/create-project](https://developers.google.com/workspace/guides/create-project) for more details on how to activate your own api (google drive and google doc apis are free). Google docs scopes: [https://developers.google.com/identity/protocols/oauth2/scopes#docs](https://developers.google.com/identity/protocols/oauth2/scopes#docs)
 
   * After creating the OAuth 2.0, download the client secret, rename it to credentials, and put it into the secrets folder

@@ -1,0 +1,23 @@
+{
+    "settings": {
+        "browser": "NONE",
+        "localstorage": "localstorage"
+    },
+    "stories": [
+        {
+            "series_name": "Summoned Slinger",
+            "local_series_id": 0,
+            "general": {
+                "scribblehub": {
+                    "series_id": "317616"
+                }
+            },
+            "chapters": [
+                {
+                    "local_file": "localstorage\\Summoned Slinger\\Chapter 2",
+                    "scribblehub": "3186640"
+                }
+            ]
+        }
+    ]
+}

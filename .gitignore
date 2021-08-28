@@ -2,6 +2,8 @@
 credentials.json
 token.json
 secrets.json
+localstorage/
+temp/
 
 # Tests
 test/
@@ -145,3 +147,6 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+#VS Code
+.vscode
